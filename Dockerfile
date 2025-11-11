@@ -20,9 +20,10 @@ WORKDIR /app
 COPY . /app/
 
 # Create storage directory and set permissions
-RUN mkdir -p /var/files \
+RUN mkdir -p /var/files/tmp \
     && chown -R application:application /var/files \
     && chmod 755 /var/files \
+    && chmod 755 /var/files/tmp \
     && chown -R application:application /app
 
 # Configure nginx based on setup/nginx.conf

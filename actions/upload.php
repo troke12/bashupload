@@ -40,6 +40,8 @@ foreach ( $_FILES as $key_file => $file )
   # move file to a final location
 	$destination = STORAGE . '/' . md5('/' . $id . '-' . $file['name']);
 	rename($file['tmp_name'], $destination);
+	# Set permissions so nginx can read the file (644 = rw-r--r--)
+	chmod($destination, 0644);
 
   # register this uploaded file data
 	$uploads[] = [
