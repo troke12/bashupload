@@ -11,7 +11,6 @@ on:
 env:
   DOCKER_HUB_USERNAME: troke12
   DOCKER_HUB_REPOSITORY: ${{ secrets.DOCKER_HUB_REPOSITORY || 'bashupload' }}
-  # Password tidak diekspor ke env untuk keamanan
 
 jobs:
   build-and-push:
@@ -24,20 +23,24 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Validate Docker Hub secrets
+        env:
+          DOCKER_HUB_PASSWORD: ${{ secrets.DOCKER_HUB_PASSWORD }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -z "$DOCKER_HUB_PASSWORD" ] && [ -z "$DOCKERHUB_TOKEN" ]; then
+            echo "::error::DOCKER_HUB_PASSWORD (atau DOCKERHUB_TOKEN) tidak ditemukan pada repository secrets."
+            echo "Tambahkan salah satu secret berikut di Settings > Secrets and variables > Actions:"
+            echo " - DOCKER_HUB_PASSWORD  (disarankan)"
+            echo " - DOCKERHUB_TOKEN      (fallback)"
+            exit 1
+          fi
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: troke12
-          password: ${{ secrets.DOCKER_HUB_PASSWORD || secrets.DOCKERHUB_TOKEN }}
-
-      - name: Validate Docker Hub secrets
-        if: ${{ !secrets.DOCKER_HUB_PASSWORD && !secrets.DOCKERHUB_TOKEN }}
-        run: |
-          echo "::error::DOCKER_HUB_PASSWORD (atau DOCKERHUB_TOKEN) tidak ditemukan pada repository secrets."
-          echo "Tambahkan salah satu secret berikut di Settings > Secrets and variables > Actions:"
-          echo " - DOCKER_HUB_PASSWORD  (disarankan)"
-          echo " - DOCKERHUB_TOKEN      (fallback)"
-          exit 1
+          password: ${{ secrets.DOCKER_HUB_PASSWORD != '' && secrets.DOCKER_HUB_PASSWORD || secrets.DOCKERHUB_TOKEN }}
 
       - name: Determine Docker image tags
         id: tags
