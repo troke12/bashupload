@@ -19,6 +19,9 @@ if ( in_array($_SERVER['REQUEST_METHOD'], ['POST', 'PUT']) ) {
 }
 else {
   
+  # Initialize $doc variable
+  $doc = false;
+  
   # load documentation, if we have the docs repo cloned
   if ( is_file($docs_handler) ) {
     $has_docs = true;
@@ -39,7 +42,7 @@ else {
 
 # Execute routed handler
 $accept = explode(',', $_SERVER['HTTP_ACCEPT']);
-if ( $_POST['json'] == 'true' ) $renderer = 'json';
+if ( isset($_POST['json']) && $_POST['json'] == 'true' ) $renderer = 'json';
 else if ( in_array('text/html', $accept) ) $renderer = 'html';
 else $renderer = 'txt';
 
