@@ -138,11 +138,16 @@ foreach ( $delete_metafiles as $metafile ) {
   if ( $download_count >= MAX_DOWNLOADS ) {
     $max_downloads_files_found++;
     
-    # Check if metafile is at least 60 minutes old (to ensure download is complete)
     $metafile_mtime = @filemtime($metafile);
     $metafile_age_minutes = $metafile_mtime !== false ? (time() - $metafile_mtime) / 60 : 0;
     
-    if ( $metafile_mtime !== false && $metafile_mtime <= $min_age ) {
+    # For files that reached MAX_DOWNLOADS, we can delete immediately
+    # The file is already fully downloaded (reached max limit), so no need to wait
+    # Only wait 1 minute to ensure the download counter was written to disk
+    $min_wait_minutes = 1; // Very short wait to ensure counter was written
+    $min_wait_time = time() - ($min_wait_minutes * 60);
+    
+    if ( $metafile_mtime !== false && $metafile_mtime <= $min_wait_time ) {
       $actual_file = str_replace('.delete', '', $metafile);
       
       # Delete metafile
@@ -155,7 +160,7 @@ foreach ( $delete_metafiles as $metafile ) {
         $max_downloads_files_processed++;
       }
     } else {
-      log_message("File reached max downloads but too new to delete: " . basename($metafile) . " (downloads: {$download_count}, age: " . round($metafile_age_minutes, 1) . " min, need 60 min)");
+      log_message("File reached max downloads but too new to delete: " . basename($metafile) . " (downloads: {$download_count}, age: " . round($metafile_age_minutes, 1) . " min, need {$min_wait_minutes} min)");
     }
   }
 }
