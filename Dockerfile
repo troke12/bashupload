@@ -57,7 +57,8 @@ RUN echo "max_input_time = 1800" >> /opt/docker/etc/php/php.ini
 
 # Setup cron job for cleaning expired files (runs every hour as per README.md)
 # Run as application user to have proper access to /var/files
-RUN echo "0 * * * * cd /app && php tasks/clean.php" | crontab -u application -
+# Redirect output to stderr so it appears in docker logs
+RUN echo "0 * * * * cd /app && php tasks/clean.php >&2" | crontab -u application -
 
 # Expose port 80 (HTTP only)
 # FORCE_SSL is set to false in config.php, so no SSL/HTTPS redirect will occur

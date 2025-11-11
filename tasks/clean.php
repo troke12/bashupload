@@ -4,12 +4,24 @@
 
 require __DIR__ . '/../config.php';
 
+# Logging function that outputs to both stderr and stdout for docker logs
+function log_message($message) {
+  $timestamp = date('Y-m-d H:i:s');
+  $log_msg = "[{$timestamp}] Clean task: {$message}\n";
+  # Output to stderr (visible in docker logs)
+  fwrite(STDERR, $log_msg);
+  # Also use error_log for system logging
+  error_log("Clean task: " . $message);
+}
+
 # Get storage path
 $storage_path = realpath(STORAGE);
 if ( !$storage_path || !is_dir($storage_path) ) {
-  error_log("Clean task: Storage path not found: " . STORAGE);
+  log_message("Storage path not found: " . STORAGE);
   exit(1);
 }
+
+log_message("Starting cleanup process...");
 
 $deleted_count = 0;
 $error_count = 0;
@@ -31,7 +43,7 @@ function safe_delete_file($file_path) {
     return true;
   } else {
     $error_count++;
-    error_log("Clean task: Failed to delete file: " . $file_path);
+    log_message("Failed to delete file: " . basename($file_path));
     return false;
   }
 }
@@ -88,7 +100,7 @@ foreach ( $all_files as $file ) {
   $file_mtime = @filemtime($file);
   if ( $file_mtime !== false && $file_mtime < $expired_time ) {
     safe_delete_file($file);
-    error_log("Clean task: Deleted expired file: " . basename($file));
+    log_message("Deleted expired file: " . basename($file));
   }
 }
 
@@ -126,12 +138,10 @@ foreach ( $delete_metafiles as $metafile ) {
     # Delete actual file
     if ( is_file($actual_file) ) {
       safe_delete_file($actual_file);
-      error_log("Clean task: Deleted file (reached max downloads): " . basename($actual_file));
+      log_message("Deleted file (reached max downloads): " . basename($actual_file));
     }
   }
 }
 
 # Log summary
-if ( $deleted_count > 0 || $error_count > 0 ) {
-  error_log("Clean task: Completed. Deleted: {$deleted_count} files, Errors: {$error_count}");
-}
+log_message("Completed. Deleted: {$deleted_count} files, Errors: {$error_count}");
