@@ -16,14 +16,19 @@ ENV SERVICE_NGINX_CLIENT_MAX_BODY_SIZE=2G
 # Set working directory
 WORKDIR /app
 
+# Copy fix-permissions script first
+COPY fix-permissions.sh /usr/local/bin/fix-permissions.sh
+RUN chmod +x /usr/local/bin/fix-permissions.sh
+
 # Copy application files
 COPY . /app/
 
 # Create storage directory and set permissions
+# Use 777 for directory to allow host to delete files (Windows volume mount)
 RUN mkdir -p /var/files/tmp \
     && chown -R application:application /var/files \
-    && chmod 755 /var/files \
-    && chmod 755 /var/files/tmp \
+    && chmod 777 /var/files \
+    && chmod 777 /var/files/tmp \
     && chown -R application:application /app
 
 # Configure nginx based on setup/nginx.conf

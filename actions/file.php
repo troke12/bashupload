@@ -38,6 +38,8 @@ else if ( $file['size'] && !$max_downloads_reached )
 {
   # Increment download counter before serving file
   file_put_contents($download_mark_file, $downloads + 1);
+  # Set permissions so host can delete (666 = rw-rw-rw-)
+  chmod($download_mark_file, 0666);
   
 	header('Content-type: ' . system_extension_mime_type($file['name']));
 	header('Content-Disposition: attachment; filename=' . $file['name']); 
