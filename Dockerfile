@@ -25,10 +25,25 @@ RUN mkdir -p /var/files \
     && chmod 755 /var/files \
     && chown -R application:application /app
 
-# Configure nginx vhost for /files location
-RUN printf 'location /files {\n\troot /var;\n\tinternal;\n}\n' > /opt/docker/etc/nginx/vhost.common.d/20-files.conf
+# Configure nginx based on setup/nginx.conf
+# This configuration follows the structure from setup/nginx.conf
+# 
+# From setup/nginx.conf:
+# - server_name: handled by webdevops default (_)
+# - listen 80: handled by webdevops default
+# - root: set via WEB_DOCUMENT_ROOT=/app/web
+# - location /: handled by webdevops default (try_files $uri /index.php?$args)
+# - location /files: configured below (internal file access)
+# - location = /index.php: handled by webdevops default with fastcgi timeout
 
-# Configure PHP-FPM timeout in nginx
+# Location /files for internal file access (based on STORAGE in config.php)
+# This matches setup/nginx.conf lines 19-23
+RUN printf '# Location /files - internal file access\n' > /opt/docker/etc/nginx/vhost.common.d/20-files.conf \
+    && printf '# Be sure to update this if you have updated "STORAGE" param in config.php\n' >> /opt/docker/etc/nginx/vhost.common.d/20-files.conf \
+    && printf 'location /files {\n\troot /var;\n\tinternal;\n}\n' >> /opt/docker/etc/nginx/vhost.common.d/20-files.conf
+
+# Configure PHP-FPM timeout (based on setup/nginx.conf line 28)
+# Webdevops handles fastcgi_pass automatically, we just need to set timeout
 RUN echo "fastcgi_read_timeout 1800;" >> /opt/docker/etc/nginx/vhost.common.d/10-php.conf
 
 # Configure PHP settings via php.ini
