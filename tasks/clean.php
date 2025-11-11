@@ -22,6 +22,8 @@ if ( !$storage_path || !is_dir($storage_path) ) {
 }
 
 log_message("Starting cleanup process...");
+log_message("Storage path: {$storage_path}");
+log_message("EXPIRE_DAYS: " . EXPIRE_DAYS . ", MAX_DOWNLOADS: " . MAX_DOWNLOADS);
 
 $deleted_count = 0;
 $error_count = 0;
@@ -87,8 +89,9 @@ function get_files_recursive($dir, $exclude_patterns = []) {
 
 # 1. Delete expired files (older than EXPIRE_DAYS)
 # Exclude .delete files and tmp directory
-$all_files = get_files_recursive($storage_path, ['*.delete', 'tmp/*']);
+$all_files = get_files_recursive($storage_path, ['tmp/*']);
 $expired_time = time() - (EXPIRE_DAYS * 24 * 60 * 60);
+$expired_files_found = 0;
 
 foreach ( $all_files as $file ) {
   # Skip .delete files and files in tmp directory
@@ -98,16 +101,25 @@ foreach ( $all_files as $file ) {
   
   # Check if file is older than EXPIRE_DAYS
   $file_mtime = @filemtime($file);
-  if ( $file_mtime !== false && $file_mtime < $expired_time ) {
-    safe_delete_file($file);
-    log_message("Deleted expired file: " . basename($file));
+  if ( $file_mtime !== false ) {
+    $file_age_days = (time() - $file_mtime) / (24 * 60 * 60);
+    if ( $file_mtime < $expired_time ) {
+      safe_delete_file($file);
+      log_message("Deleted expired file: " . basename($file) . " (age: " . round($file_age_days, 2) . " days)");
+    } else {
+      $expired_files_found++;
+    }
   }
 }
 
+log_message("Found {$expired_files_found} files not yet expired");
+
 # 2. Delete files that reached MAX_DOWNLOADS
-# Find all .delete metafiles (at least 60 minutes old to ensure download is complete)
+# Find all .delete metafiles
 $delete_metafiles = get_files_recursive($storage_path, ['tmp/*']);
 $min_age = time() - (60 * 60); // 60 minutes ago
+$max_downloads_files_found = 0;
+$max_downloads_files_processed = 0;
 
 foreach ( $delete_metafiles as $metafile ) {
   # Only process .delete files
@@ -115,33 +127,40 @@ foreach ( $delete_metafiles as $metafile ) {
     continue;
   }
   
-  # Check if metafile is at least 60 minutes old
-  $metafile_mtime = @filemtime($metafile);
-  if ( $metafile_mtime === false || $metafile_mtime > $min_age ) {
-    continue;
-  }
-  
-  # Read download count
+  # Read download count first
   $download_count = 0;
   $content = @file_get_contents($metafile);
   if ( $content !== false ) {
     $download_count = max(intval(trim($content)), 1);
   }
   
-  # If reached max downloads, delete both metafile and actual file
+  # Check if reached max downloads
   if ( $download_count >= MAX_DOWNLOADS ) {
-    $actual_file = str_replace('.delete', '', $metafile);
+    $max_downloads_files_found++;
     
-    # Delete metafile
-    safe_delete_file($metafile);
+    # Check if metafile is at least 60 minutes old (to ensure download is complete)
+    $metafile_mtime = @filemtime($metafile);
+    $metafile_age_minutes = $metafile_mtime !== false ? (time() - $metafile_mtime) / 60 : 0;
     
-    # Delete actual file
-    if ( is_file($actual_file) ) {
-      safe_delete_file($actual_file);
-      log_message("Deleted file (reached max downloads): " . basename($actual_file));
+    if ( $metafile_mtime !== false && $metafile_mtime <= $min_age ) {
+      $actual_file = str_replace('.delete', '', $metafile);
+      
+      # Delete metafile
+      safe_delete_file($metafile);
+      
+      # Delete actual file
+      if ( is_file($actual_file) ) {
+        safe_delete_file($actual_file);
+        log_message("Deleted file (reached max downloads): " . basename($actual_file) . " (downloads: {$download_count}, age: " . round($metafile_age_minutes, 1) . " min)");
+        $max_downloads_files_processed++;
+      }
+    } else {
+      log_message("File reached max downloads but too new to delete: " . basename($metafile) . " (downloads: {$download_count}, age: " . round($metafile_age_minutes, 1) . " min, need 60 min)");
     }
   }
 }
+
+log_message("Found {$max_downloads_files_found} files that reached MAX_DOWNLOADS, processed {$max_downloads_files_processed}");
 
 # Log summary
 log_message("Completed. Deleted: {$deleted_count} files, Errors: {$error_count}");
