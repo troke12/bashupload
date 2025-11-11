@@ -1,5 +1,9 @@
 <?php if ( $sorry ) { ?>
-	<p class="sorry">404 no such file</p>
+	<?php if ( isset($max_downloads_reached) && $max_downloads_reached ) { ?>
+		<p class="sorry">403 File has reached maximum download limit (<?=MAX_DOWNLOADS?> download<?=MAX_DOWNLOADS > 1 ? 's' : ''?>).</p>
+	<?php } else { ?>
+		<p class="sorry">404 no such file</p>
+	<?php } ?>
 <?php } else {?>
   <div id="focus">
   	<h1><?=htmlspecialchars($file['name'])?></h1>
