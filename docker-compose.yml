@@ -7,13 +7,13 @@ services:
       dockerfile: Dockerfile
     container_name: bashupload
     ports:
-      - "80:80"
+      - "8000:80"
     volumes:
       # Persist uploaded files
       - ./data/files:/var/files
       # Optional: mount config.local.php for custom configuration
       # Uncomment the line below if you want to use config.local.php
-      # - ./config.local.php:/app/config.local.php:ro
+      - ./config.local.php:/app/config.local.php:ro
     restart: unless-stopped
     environment:
       # PHP Configuration (can be overridden)
