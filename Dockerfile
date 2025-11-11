@@ -1,5 +1,6 @@
 FROM webdevops/php-nginx:8.2
 
+# HTTP Configuration - Application runs on HTTP only (FORCE_SSL = false)
 # Set document root
 ENV WEB_DOCUMENT_ROOT=/app/web
 
@@ -37,5 +38,7 @@ RUN echo "max_input_time = 1800" >> /opt/docker/etc/php/php.ini
 # Run as application user to have proper access to /var/files
 RUN echo "0 * * * * cd /app && php tasks/clean.php" | crontab -u application -
 
-# Expose port 80 (HTTP only, FORCE_SSL is false by default)
+# Expose port 80 (HTTP only)
+# FORCE_SSL is set to false in config.php, so no SSL/HTTPS redirect will occur
+# Application is accessible via HTTP only: http://localhost:8000
 EXPOSE 80
