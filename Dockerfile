@@ -33,5 +33,9 @@ RUN echo "fastcgi_read_timeout 1800;" >> /opt/docker/etc/nginx/vhost.common.d/10
 # Configure PHP settings via php.ini
 RUN echo "max_input_time = 1800" >> /opt/docker/etc/php/php.ini
 
+# Setup cron job for cleaning expired files (runs every hour as per README.md)
+# Run as application user to have proper access to /var/files
+RUN echo "0 * * * * cd /app && php tasks/clean.php" | crontab -u application -
+
 # Expose port 80
 EXPOSE 80
