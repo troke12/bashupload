@@ -11,47 +11,127 @@ if ( !$storage_path || !is_dir($storage_path) ) {
   exit(1);
 }
 
-# delete all expired files (older than EXPIRE_DAYS)
-# Exclude .delete files and tmp directory
-$expired_cmd = 'find ' . escapeshellarg($storage_path) . ' -type f ! -name "*.delete" ! -path "' . $storage_path . '/tmp/*" -mtime +' . intval(EXPIRE_DAYS) . ' -delete 2>&1';
-exec($expired_cmd, $expired_output, $expired_code);
-if ( $expired_code !== 0 && !empty($expired_output) ) {
-  error_log("Clean task: Error deleting expired files: " . implode("\n", $expired_output));
-}
+$deleted_count = 0;
+$error_count = 0;
 
-# select all files with ".delete" metafile
-# with at least one download was made (> 60 minutes ago to make sure downloading process is complete for big files)
-$delete_files = [];
-exec('find ' . escapeshellarg($storage_path) . ' -type f -name "*.delete" -mmin +60 2>&1', $delete_output, $delete_code);
-
-if ( $delete_code === 0 && !empty($delete_output) ) {
-  $delete_files = $delete_output;
-}
-
-# remove all files which were downloaded max times
-foreach ( $delete_files as $file ) {
-  $file = trim($file);
-  if ( empty($file) || !is_file($file) ) continue;
+# Function to safely delete file with permission fix
+function safe_delete_file($file_path) {
+  global $deleted_count, $error_count;
   
-  $download_count = 0;
-  $content = @file_get_contents($file);
-  if ( $content !== false ) {
-    $download_count = max(intval($content), 1);
+  if ( !is_file($file_path) ) {
+    return false;
   }
   
-  if ( $download_count >= MAX_DOWNLOADS ) {
-    $actual_file = str_replace('.delete', '', $file);
+  # Fix permission before delete (666 = rw-rw-rw-)
+  @chmod($file_path, 0666);
+  
+  # Try to delete
+  if ( @unlink($file_path) ) {
+    $deleted_count++;
+    return true;
+  } else {
+    $error_count++;
+    error_log("Clean task: Failed to delete file: " . $file_path);
+    return false;
+  }
+}
+
+# Function to get all files in directory recursively
+function get_files_recursive($dir, $exclude_patterns = []) {
+  $files = [];
+  if ( !is_dir($dir) ) {
+    return $files;
+  }
+  
+  $items = @scandir($dir);
+  if ( $items === false ) {
+    return $files;
+  }
+  
+  foreach ( $items as $item ) {
+    if ( $item === '.' || $item === '..' ) continue;
     
-    # Delete .delete metafile
-    if ( is_file($file) ) {
-      @unlink($file);
+    $full_path = $dir . '/' . $item;
+    
+    # Check exclude patterns
+    $excluded = false;
+    foreach ( $exclude_patterns as $pattern ) {
+      if ( fnmatch($pattern, $item) || fnmatch($pattern, $full_path) ) {
+        $excluded = true;
+        break;
+      }
     }
+    if ( $excluded ) continue;
+    
+    if ( is_file($full_path) ) {
+      $files[] = $full_path;
+    } elseif ( is_dir($full_path) ) {
+      $files = array_merge($files, get_files_recursive($full_path, $exclude_patterns));
+    }
+  }
+  
+  return $files;
+}
+
+# 1. Delete expired files (older than EXPIRE_DAYS)
+# Exclude .delete files and tmp directory
+$all_files = get_files_recursive($storage_path, ['*.delete', 'tmp/*']);
+$expired_time = time() - (EXPIRE_DAYS * 24 * 60 * 60);
+
+foreach ( $all_files as $file ) {
+  # Skip .delete files and files in tmp directory
+  if ( strpos($file, '.delete') !== false || strpos($file, '/tmp/') !== false ) {
+    continue;
+  }
+  
+  # Check if file is older than EXPIRE_DAYS
+  $file_mtime = @filemtime($file);
+  if ( $file_mtime !== false && $file_mtime < $expired_time ) {
+    safe_delete_file($file);
+    error_log("Clean task: Deleted expired file: " . basename($file));
+  }
+}
+
+# 2. Delete files that reached MAX_DOWNLOADS
+# Find all .delete metafiles (at least 60 minutes old to ensure download is complete)
+$delete_metafiles = get_files_recursive($storage_path, ['tmp/*']);
+$min_age = time() - (60 * 60); // 60 minutes ago
+
+foreach ( $delete_metafiles as $metafile ) {
+  # Only process .delete files
+  if ( strpos($metafile, '.delete') === false ) {
+    continue;
+  }
+  
+  # Check if metafile is at least 60 minutes old
+  $metafile_mtime = @filemtime($metafile);
+  if ( $metafile_mtime === false || $metafile_mtime > $min_age ) {
+    continue;
+  }
+  
+  # Read download count
+  $download_count = 0;
+  $content = @file_get_contents($metafile);
+  if ( $content !== false ) {
+    $download_count = max(intval(trim($content)), 1);
+  }
+  
+  # If reached max downloads, delete both metafile and actual file
+  if ( $download_count >= MAX_DOWNLOADS ) {
+    $actual_file = str_replace('.delete', '', $metafile);
+    
+    # Delete metafile
+    safe_delete_file($metafile);
     
     # Delete actual file
     if ( is_file($actual_file) ) {
-      @unlink($actual_file);
+      safe_delete_file($actual_file);
+      error_log("Clean task: Deleted file (reached max downloads): " . basename($actual_file));
     }
-    
-    error_log("Clean task: Deleted file (reached max downloads): " . basename($actual_file));
   }
+}
+
+# Log summary
+if ( $deleted_count > 0 || $error_count > 0 ) {
+  error_log("Clean task: Completed. Deleted: {$deleted_count} files, Errors: {$error_count}");
 }
