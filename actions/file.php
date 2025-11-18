@@ -5,8 +5,23 @@
 
 
 # file stats
-$file = explode('/', trim($uri, '/'));
-$file = ['id' => $file[0], 'name' => $file[1], 'path' => '/' . $file[0] . '-' . $file[1], 'extension' => strtolower(pathinfo($file[1], PATHINFO_EXTENSION))];
+$uri_path = trim($uri ?? '', '/');
+$file_parts = $uri_path === '' ? [] : explode('/', $uri_path);
+
+# Invalid request (e.g., /index.php, /logo.png) should return 404 without PHP warnings
+if ( count($file_parts) < 2 || $file_parts[0] === '' || $file_parts[1] === '' ) {
+  header('HTTP/1.0 404 Not Found');
+  exit;
+}
+
+$file_id = $file_parts[0];
+$file_name = implode('/', array_slice($file_parts, 1)); # support edge-case names containing slashes
+$file = [
+  'id' => $file_id,
+  'name' => $file_name,
+  'path' => '/' . $file_id . '-' . $file_name,
+  'extension' => strtolower(pathinfo($file_name, PATHINFO_EXTENSION))
+];
 
 $file_path = STORAGE . '/' . md5($file['path']);
 $file['size'] = is_file($file_path) ? filesize($file_path) : 0;
