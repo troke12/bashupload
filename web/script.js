@@ -41,18 +41,31 @@ function upload_files(files) {
 		return r.json();
 	})
 	.then((json) => {
-		var files = json;
-		
-		for ( var file_key in files ) {
+		if ( json.error ) {
+			update_upload_state(json.error, true);
+			return;
+		}
+
+		if ( json.status && json.status === 'no_files' ) {
+			update_upload_state('No files were uploaded.', true);
+			return;
+		}
+
+		for ( var file_key in json ) {
+			if ( !json[file_key] || !json[file_key].url ) {
+				continue;
+			}
+
 			var file_progress = document.querySelector('#' + file_key);
-			file_progress.innerHTML = '<a target="_blank" href="' + files[file_key].url + '">' + files[file_key].url + '</a> ' + files[file_key].size + ' bytes';
+			if ( !file_progress ) {
+				continue;
+			}
+
+			file_progress.innerHTML = '<a target="_blank" href="' + json[file_key].url + '">' + json[file_key].url + '</a> ' + json[file_key].size + ' bytes';
 			file_progress.classList.remove('uploading');
 		}
 
-		var elements = document.getElementsByClassName('uploading');
-		for ( var i = 0; i < elements.length; i++ ) {
-			elements[i].innerText = 'Hmm';
-		}
+		update_upload_state('Upload complete', false);
 	})
 	.catch(() => {
 		var dropper = document.getElementById('dropper');
@@ -60,10 +73,7 @@ function upload_files(files) {
 		dropper.classList.remove('active');
 		dropzone.classList.remove('active');
 
-		var elements = document.getElementsByClassName('uploading');
-		for ( var i = 0; i < elements.length; i++ ) {
-			elements[i].innerText = 'Failed :(';
-		}
+		update_upload_state('Upload failed. Please try again.', true);
 	});
 }
 
@@ -114,6 +124,23 @@ function init_uploads() {
 	uploading();
 }
 
+function update_upload_state(message, is_error) {
+	var elements = document.getElementsByClassName('uploading');
+	for ( var i = 0; i < elements.length; i++ ) {
+		elements[i].innerText = is_error ? message : 'Done';
+		elements[i].classList.remove('uploading');
+	}
+
+	var header = document.getElementById('browser-header');
+	if ( header ) {
+		header.innerText = message || '';
+		if ( is_error ) {
+			header.classList.add('error');
+		} else {
+			header.classList.remove('error');
+		}
+	}
+}
 
 
 // Utilities
